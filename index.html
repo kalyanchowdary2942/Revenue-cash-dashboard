@@ -147,20 +147,6 @@ table.rev-table tbody tr:last-child td{border-bottom:none;}
 .status-badge.bad{background:var(--red-tint); color:var(--red);}
 .empty-row td{text-align:center; padding:40px 20px; color:var(--text-tertiary); font-size:14px;}
 
-/* UPLOAD ZONE */
-.upload-card{
-  margin-top:24px; padding:22px 24px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;
-  border:1.5px dashed var(--separator-strong); background:var(--bg-card);
-}
-.upload-card.dragover{border-color:var(--blue); background:var(--blue-tint);}
-.upload-icon{
-  width:46px; height:46px; border-radius:14px; background:var(--blue-tint); color:var(--blue);
-  display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;
-}
-.upload-text{flex:1; min-width:200px;}
-.upload-text strong{display:block; font-size:14.5px; margin-bottom:2px;}
-.upload-text span{font-size:12.5px; color:var(--text-secondary);}
-#fileInput{display:none;}
 .toast{
   position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0;
   background:var(--bg-card-solid); border:0.5px solid var(--separator); border-radius:var(--radius-pill);
@@ -229,17 +215,6 @@ table.rev-table tbody tr:last-child td{border-bottom:none;}
     </div>
   </div>
 
-  <div class="glass upload-card" id="uploadCard">
-    <div class="upload-icon">⚡</div>
-    <div class="upload-text">
-      <strong>Auto-synced from GitHub</strong>
-      <span>This dashboard loads REPORT.xlsx directly from your GitHub repo on open. Update the file on GitHub, then refresh this page — or use manual upload below as a backup.</span>
-    </div>
-    <button class="pill-btn upload" id="githubRefreshBtn" style="background:var(--green);">🔄 Refresh from GitHub</button>
-    <button class="pill-btn upload" id="uploadBtn">📤 Upload file manually</button>
-    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
-  </div>
-
 </div>
 
 <div class="toast" id="toast"><span class="dot"></span><span id="toastText">Saved</span></div>
@@ -253,8 +228,7 @@ function setTheme(mode){
   root.setAttribute('data-theme', mode);
   themeKnob.textContent = mode === 'dark' ? '🌙' : '☀️';
 }
-const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-setTheme(prefersDark ? 'dark' : 'light');
+setTheme('light');
 themeToggle.addEventListener('click', () => {
   const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
   setTheme(next);
@@ -301,6 +275,7 @@ let summary = sampleDerived.summary;
 let zoneBreakdown = sampleDerived.zoneBreakdown;
 let sortState = { key:'cashInHand', dir:'desc' };
 let zoneChartInstance = null;
+let lastDataFingerprint = null;
 
 /* ---------- THEME-AWARE CHART COLORS ---------- */
 function chartColors(){
@@ -450,19 +425,6 @@ function showToast(msg){
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
 }
 
-/* ---------- EXCEL UPLOAD ---------- */
-const fileInput = document.getElementById('fileInput');
-const uploadBtn = document.getElementById('uploadBtn');
-const uploadCard = document.getElementById('uploadCard');
-const githubRefreshBtn = document.getElementById('githubRefreshBtn');
-uploadBtn.addEventListener('click', () => fileInput.click());
-githubRefreshBtn.addEventListener('click', () => fetchFromGitHub());
-fileInput.addEventListener('change', (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); });
-
-['dragover','dragenter'].forEach(evt => uploadCard.addEventListener(evt, (e) => { e.preventDefault(); uploadCard.classList.add('dragover'); }));
-['dragleave','drop'].forEach(evt => uploadCard.addEventListener(evt, (e) => { e.preventDefault(); uploadCard.classList.remove('dragover'); }));
-uploadCard.addEventListener('drop', (e) => { if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
-
 function normalizeKey(k){ return String(k).trim().toLowerCase().replace(/[\s_]+/g,''); }
 function parseAmount(val){
   if(typeof val === 'number') return val;
@@ -478,8 +440,8 @@ function findRowIndex(grid, predicate){
 }
 function cellText(v){ return String(v ?? '').trim().toLowerCase(); }
 
-function parseWorkbookGrid(grid, sourceLabel){
-  if(!grid.length){ showToast('⚠️ File appears empty'); return false; }
+function parseWorkbookGrid(grid, sourceLabel, silent){
+  if(!grid.length){ if(!silent) showToast('⚠️ File appears empty'); return false; }
 
   // --- Section 1: summary totals (header row: Opening Balance / Total Zones / Cash in Hand / Cash Deposited) ---
   const summaryHeaderIdx = findRowIndex(grid, row =>
@@ -538,59 +500,53 @@ function parseWorkbookGrid(grid, sourceLabel){
     }
   }
 
-  if(!newRawData.length){ showToast('⚠️ Could not find the branch detail table'); return false; }
+  if(!newRawData.length){ if(!silent) showToast('⚠️ Could not find the branch detail table'); return false; }
+
+  const newFingerprint = JSON.stringify({newRawData, newSummary, newZoneBreakdown});
+  const isFirstLoad = lastDataFingerprint === null;
+  const dataChanged = !isFirstLoad && newFingerprint !== lastDataFingerprint;
+  lastDataFingerprint = newFingerprint;
 
   rawData = newRawData;
   summary = newSummary || deriveSummaryAndZones(newRawData).summary;
   zoneBreakdown = newZoneBreakdown.length ? newZoneBreakdown : deriveSummaryAndZones(newRawData).zoneBreakdown;
   refreshData();
-  document.getElementById('lastSync').textContent = 'Updated just now';
-  showToast(`✅ Loaded ${newRawData.length} branch records from ${sourceLabel}`);
+  document.getElementById('lastSync').textContent = 'Last checked ' + new Date().toLocaleTimeString();
+  if(!silent || dataChanged){
+    showToast(dataChanged ? `✅ Updated — ${newRawData.length} branch records` : `✅ Loaded ${newRawData.length} branch records from ${sourceLabel}`);
+  }
   return true;
 }
 
-function handleFile(file){
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try{
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, {type:'array', cellDates:false});
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const grid = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
-      parseWorkbookGrid(grid, file.name);
-    }catch(err){
-      console.error(err);
-      showToast('⚠️ Could not parse file — check format');
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
 
 /* ---------- GITHUB AUTO-FETCH ---------- */
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/kalyanchowdary2942/Revenue-cash-dashboard/main/REPORT.xlsx';
 
-async function fetchFromGitHub(){
+async function fetchFromGitHub(silent){
   const syncEl = document.getElementById('lastSync');
   try{
-    syncEl.textContent = 'Loading from GitHub…';
+    if(!silent) syncEl.textContent = 'Loading from GitHub…';
     const res = await fetch(GITHUB_RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if(!res.ok) throw new Error('HTTP ' + res.status);
     const buf = await res.arrayBuffer();
     const workbook = XLSX.read(new Uint8Array(buf), {type:'array', cellDates:false});
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const grid = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
-    const ok = parseWorkbookGrid(grid, 'GitHub');
-    if(!ok) syncEl.textContent = 'Showing sample data';
+    const ok = parseWorkbookGrid(grid, 'GitHub', silent);
+    if(!ok && !silent) syncEl.textContent = 'Showing sample data';
   }catch(err){
     console.error('GitHub fetch failed:', err);
-    syncEl.textContent = 'Showing sample data (GitHub fetch failed)';
-    showToast('⚠️ Could not load from GitHub — showing sample data');
+    if(!silent){
+      syncEl.textContent = 'Showing sample data (GitHub fetch failed)';
+      showToast('⚠️ Could not load from GitHub — showing sample data');
+    }
   }
 }
 
 /* ---------- INIT ---------- */
 refreshData();
-fetchFromGitHub();
+fetchFromGitHub(false);
+setInterval(() => fetchFromGitHub(true), 30000);
 </script>
 </body>
 </html>
