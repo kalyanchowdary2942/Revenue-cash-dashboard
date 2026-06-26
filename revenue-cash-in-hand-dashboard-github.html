@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue Cash in Hand Report</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#F2F2F7; --bg-elev:#FFFFFF; --bg-card:rgba(255,255,255,0.65);
+  --bg-card-solid:#FFFFFF; --header-glass:rgba(255,255,255,0.72);
+  --text-primary:#1C1C1E; --text-secondary:#6E6E73; --text-tertiary:#AEAEB2;
+  --separator:rgba(60,60,67,0.16); --separator-strong:rgba(60,60,67,0.29);
+  --blue:#007AFF; --green:#34C759; --amber:#FF9500; --red:#FF3B30; --purple:#AF52DE; --teal:#5AC8FA;
+  --blue-tint:rgba(0,122,255,0.12); --green-tint:rgba(52,199,89,0.12); --amber-tint:rgba(255,149,0,0.12); --red-tint:rgba(255,59,48,0.12);
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.03);
+  --shadow-md:0 4px 16px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg:0 12px 32px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.05);
+  --blur:saturate(180%) blur(20px);
+  --radius-sm:10px; --radius-md:16px; --radius-lg:22px; --radius-pill:980px;
+}
+:root[data-theme="dark"]{
+  --bg:#000000; --bg-elev:#1C1C1E; --bg-card:rgba(28,28,30,0.68);
+  --bg-card-solid:#1C1C1E; --header-glass:rgba(28,28,30,0.72);
+  --text-primary:#F5F5F7; --text-secondary:#98989D; --text-tertiary:#636366;
+  --separator:rgba(84,84,88,0.6); --separator-strong:rgba(84,84,88,0.8);
+  --blue:#0A84FF; --green:#30D158; --amber:#FF9F0A; --red:#FF453A; --purple:#BF5AF2; --teal:#64D2FF;
+  --blue-tint:rgba(10,132,255,0.18); --green-tint:rgba(48,209,88,0.18); --amber-tint:rgba(255,159,10,0.18); --red-tint:rgba(255,69,58,0.18);
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md:0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg:0 12px 32px rgba(0,0,0,0.5);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text-primary);
+  font-family:-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing:antialiased; min-height:100vh; transition:background .35s ease, color .35s ease;
+  letter-spacing:-0.01em;
+}
+body::before{
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:
+    radial-gradient(circle at 12% 8%, var(--blue-tint), transparent 45%),
+    radial-gradient(circle at 88% 0%, var(--purple-tint, rgba(175,82,222,0.10)), transparent 40%),
+    radial-gradient(circle at 50% 100%, var(--green-tint), transparent 45%);
+  opacity:.9;
+}
+.wrap{max-width:1320px; margin:0 auto; padding:0 20px 64px;}
+
+/* HEADER */
+header.app-header{
+  position:sticky; top:0; z-index:50;
+  background:var(--header-glass); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+  border-bottom:0.5px solid var(--separator);
+}
+.header-inner{
+  max-width:1320px; margin:0 auto; padding:16px 20px;
+  display:flex; align-items:center; justify-content:center; gap:16px; position:relative;
+}
+.app-title{
+  font-size:22px; font-weight:700; letter-spacing:-0.01em; margin:0;
+  text-transform:uppercase; text-align:center;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.header-actions{display:flex; align-items:center; gap:10px; flex-shrink:0; position:absolute; right:20px; top:50%; transform:translateY(-50%);}
+.theme-toggle{
+  width:56px; height:32px; border-radius:var(--radius-pill); background:var(--separator);
+  border:none; position:relative; cursor:pointer; padding:0; flex-shrink:0;
+}
+.theme-toggle .knob{
+  position:absolute; top:3px; left:3px; width:26px; height:26px; border-radius:50%;
+  background:#fff; box-shadow:var(--shadow-sm); transition:transform .25s cubic-bezier(.4,0,.2,1);
+  display:flex; align-items:center; justify-content:center; font-size:13px;
+}
+:root[data-theme="dark"] .theme-toggle .knob{transform:translateX(24px); background:#3A3A3C;}
+.icon-btn{
+  width:36px; height:36px; border-radius:50%; border:0.5px solid var(--separator);
+  background:var(--bg-card); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-primary);
+  font-size:16px; transition:transform .15s ease, background .2s ease;
+}
+.icon-btn:active{transform:scale(0.92);}
+.last-sync{font-size:11px; color:var(--text-tertiary); white-space:nowrap;}
+
+/* GLASS CARD BASE */
+.glass{
+  background:var(--bg-card); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+  border:0.5px solid var(--separator); border-radius:var(--radius-lg); box-shadow:var(--shadow-md);
+}
+.solid{background:var(--bg-card-solid); border:0.5px solid var(--separator); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm);}
+
+/* METRIC CARDS */
+.metrics-row{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:20px 0 22px;
+}
+.metric-card{padding:18px 18px 16px; position:relative; overflow:hidden;}
+.metric-label{font-size:13px; color:var(--text-secondary); font-weight:500; margin:0 0 6px;}
+.metric-value{font-size:26px; font-weight:700; margin:0; letter-spacing:-0.02em;}
+.metric-card.blue .metric-value{color:var(--blue);}
+.metric-card.green .metric-value{color:var(--green);}
+.metric-card.amber .metric-value{color:var(--blue);}
+.metric-card.red .metric-value{color:var(--blue);}
+
+/* SECTION LAYOUT */
+.pill-btn{
+  display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#fff;
+  border:none; border-radius:var(--radius-pill); padding:8px 16px; cursor:pointer;
+  transition:transform .15s ease, opacity .2s ease; white-space:nowrap; font-family:inherit;
+}
+.pill-btn:active{transform:scale(0.96);}
+.pill-btn.upload{background:var(--blue);}
+
+.section-title{font-size:18px; font-weight:700; margin:28px 2px 12px; letter-spacing:-0.01em;}
+.charts-grid{display:grid; grid-template-columns:1fr; gap:16px; align-items:stretch;}
+.chart-card{padding:18px 20px;}
+.chart-card h3{font-size:14px; font-weight:700; margin:0 0 14px; color:var(--text-primary);}
+.legend-row{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; font-size:12px; color:var(--text-secondary);}
+.legend-row span{display:flex; align-items:center; gap:5px;}
+.legend-dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+
+/* TABLE */
+.table-card{padding:0; overflow:hidden;}
+.table-card-header{padding:16px 20px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.table-card-header h3{font-size:15px; font-weight:700; margin:0;}
+.row-count{font-size:12.5px; color:var(--text-secondary);}
+.table-scroll{overflow-x:auto; max-height:480px; overflow-y:auto;}
+table.rev-table{width:100%; border-collapse:collapse; font-size:13.5px; min-width:880px;}
+table.rev-table thead th{
+  position:sticky; top:0; background:var(--bg-card-solid); z-index:5;
+  text-align:left; padding:10px 14px; font-weight:600; color:var(--text-secondary);
+  border-bottom:0.5px solid var(--separator-strong); cursor:pointer; user-select:none;
+  font-size:12px; text-transform:uppercase; letter-spacing:.02em; white-space:nowrap;
+}
+table.rev-table thead th .sort-arrow{opacity:0.35; margin-left:4px; font-size:10px;}
+table.rev-table thead th.sorted .sort-arrow{opacity:1; color:var(--blue);}
+table.rev-table tbody td{padding:11px 14px; border-bottom:0.5px solid var(--separator); white-space:nowrap;}
+table.rev-table tbody tr:hover{background:rgba(120,120,128,0.08);}
+table.rev-table tbody tr:last-child td{border-bottom:none;}
+.amt{font-weight:600; font-variant-numeric:tabular-nums;}
+.status-badge{
+  font-size:11px; font-weight:700; padding:3px 9px; border-radius:var(--radius-pill); display:inline-block;
+}
+.status-badge.ok{background:var(--green-tint); color:var(--green);}
+.status-badge.warn{background:var(--amber-tint); color:var(--amber);}
+.status-badge.bad{background:var(--red-tint); color:var(--red);}
+.empty-row td{text-align:center; padding:40px 20px; color:var(--text-tertiary); font-size:14px;}
+
+/* UPLOAD ZONE */
+.upload-card{
+  margin-top:24px; padding:22px 24px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  border:1.5px dashed var(--separator-strong); background:var(--bg-card);
+}
+.upload-card.dragover{border-color:var(--blue); background:var(--blue-tint);}
+.upload-icon{
+  width:46px; height:46px; border-radius:14px; background:var(--blue-tint); color:var(--blue);
+  display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;
+}
+.upload-text{flex:1; min-width:200px;}
+.upload-text strong{display:block; font-size:14.5px; margin-bottom:2px;}
+.upload-text span{font-size:12.5px; color:var(--text-secondary);}
+#fileInput{display:none;}
+.toast{
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0;
+  background:var(--bg-card-solid); border:0.5px solid var(--separator); border-radius:var(--radius-pill);
+  padding:11px 22px; font-size:13.5px; font-weight:600; box-shadow:var(--shadow-lg); z-index:200;
+  transition:transform .3s cubic-bezier(.4,0,.2,1), opacity .3s ease; display:flex; align-items:center; gap:8px;
+  pointer-events:none; white-space:nowrap;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+.toast .dot{width:8px; height:8px; border-radius:50%; background:var(--green); flex-shrink:0;}
+
+@media (max-width:880px){
+  .metrics-row{grid-template-columns:repeat(2,1fr);}
+  .charts-grid{grid-template-columns:1fr;}
+  .app-title{font-size:16px;}
+}
+@media (max-width:520px){
+  .metrics-row{grid-template-columns:repeat(2,1fr); gap:10px;}
+  .metric-value{font-size:21px;}
+  .wrap{padding:0 12px 48px;}
+  .header-inner{padding:12px 14px;}
+  .last-sync{display:none;}
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-inner">
+    <h1 class="app-title">Revenue Cash in Hand Report</h1>
+    <div class="header-actions">
+      <span class="last-sync" id="lastSync">Updated just now</span>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <span class="knob" id="themeKnob">☀️</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="metrics-row" id="metricsRow"></div>
+
+  <div class="section-title">Overview</div>
+  <div class="charts-grid">
+    <div class="glass chart-card">
+      <h3>Cash in hand by zone</h3>
+      <div style="position:relative;height:280px;">
+        <canvas id="zoneChart" role="img" aria-label="Bar chart of cash in hand by zone"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Cash Not Deposited Branches</div>
+  <div class="solid table-card">
+    <div class="table-card-header">
+      <h3>Branch-wise records</h3>
+      <span class="row-count" id="rowCount">0 records</span>
+    </div>
+    <div class="table-scroll">
+      <table class="rev-table">
+        <thead>
+          <tr id="tableHeadRow"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="glass upload-card" id="uploadCard">
+    <div class="upload-icon">⚡</div>
+    <div class="upload-text">
+      <strong>Auto-synced from GitHub</strong>
+      <span>This dashboard loads REPORT.xlsx directly from your GitHub repo on open. Update the file on GitHub, then refresh this page — or use manual upload below as a backup.</span>
+    </div>
+    <button class="pill-btn upload" id="githubRefreshBtn" style="background:var(--green);">🔄 Refresh from GitHub</button>
+    <button class="pill-btn upload" id="uploadBtn">📤 Upload file manually</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+  </div>
+
+</div>
+
+<div class="toast" id="toast"><span class="dot"></span><span id="toastText">Saved</span></div>
+
+<script>
+/* ---------- THEME ---------- */
+const root = document.documentElement;
+const themeToggle = document.getElementById('themeToggle');
+const themeKnob = document.getElementById('themeKnob');
+function setTheme(mode){
+  root.setAttribute('data-theme', mode);
+  themeKnob.textContent = mode === 'dark' ? '🌙' : '☀️';
+}
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+setTheme(prefersDark ? 'dark' : 'light');
+themeToggle.addEventListener('click', () => {
+  const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  setTheme(next);
+  renderCharts();
+});
+
+/* ---------- SAMPLE DATA ---------- */
+const ZONES = ['North','South','East','West','Central'];
+const EXECS = {North:['R. Sharma','A. Verma'], South:['K. Reddy','S. Pillai'], East:['B. Das','M. Roy'], West:['P. Shah','J. Mehta'], Central:['N. Singh','T. Iyer']};
+const BRANCHES = {North:['Karol Bagh','Rohini','Pitampura'], South:['Anna Nagar','Adyar','Velachery'], East:['Salt Lake','Howrah','Park Street'], West:['Andheri','Borivali','Bandra'], Central:['Connaught Place','Lajpat Nagar','Saket']};
+
+function genSampleData(){
+  const rows = [];
+  let id = 1;
+  ZONES.forEach(zone => {
+    BRANCHES[zone].forEach((branch, bi) => {
+      const revenueExecutiveName = EXECS[zone][bi % 2];
+      const cashInHand = Math.round(15000 + Math.random()*90000);
+      const openingBalance = Math.random() < 0.4 ? Math.round(500 + Math.random()*50000) : 0;
+      const remarks = openingBalance > 0 ? 'Carried forward balance pending deposit' : '';
+      rows.push({ id:id++, zone, branch, revenueExecutiveName, openingBalance, cashInHand, remarks });
+    });
+  });
+  return rows;
+}
+
+function deriveSummaryAndZones(rows){
+  const totalOpeningBalance = rows.reduce((s,r)=>s+r.openingBalance,0);
+  const totalCashInHand = rows.reduce((s,r)=>s+r.cashInHand,0);
+  const totalZones = new Set(rows.map(r=>r.zone)).size;
+  const byZone = {};
+  rows.forEach(r => { byZone[r.zone] = (byZone[r.zone]||0) + r.cashInHand; });
+  const zoneBreakdown = Object.entries(byZone).map(([zone,amount])=>({zone,amount})).sort((a,b)=>b.amount-a.amount);
+  return {
+    summary: { openingBalance: totalOpeningBalance, totalZones, cashInHand: totalCashInHand, cashDeposited: Math.round(totalCashInHand*1.4) },
+    zoneBreakdown
+  };
+}
+
+let rawData = genSampleData();
+let filteredData = [...rawData];
+const sampleDerived = deriveSummaryAndZones(rawData);
+let summary = sampleDerived.summary;
+let zoneBreakdown = sampleDerived.zoneBreakdown;
+let sortState = { key:'cashInHand', dir:'desc' };
+let zoneChartInstance = null;
+
+/* ---------- THEME-AWARE CHART COLORS ---------- */
+function chartColors(){
+  const dark = root.getAttribute('data-theme') === 'dark';
+  return {
+    blue: dark ? '#0A84FF' : '#007AFF',
+    green: dark ? '#30D158' : '#34C759',
+    amber: dark ? '#FF9F0A' : '#FF9500',
+    grid: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    text: dark ? '#98989D' : '#6E6E73',
+  };
+}
+
+/* ---------- DATA REFRESH ---------- */
+function refreshData(){
+  filteredData = [...rawData];
+  sortData();
+  renderAll();
+}
+
+function sortData(){
+  const {key, dir} = sortState;
+  filteredData.sort((a,b)=>{
+    let av = a[key], bv = b[key];
+    if(typeof av === 'string') av = av.toLowerCase();
+    if(typeof bv === 'string') bv = bv.toLowerCase();
+    if(av < bv) return dir === 'asc' ? -1 : 1;
+    if(av > bv) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
+/* ---------- METRICS ---------- */
+function renderMetrics(){
+  const fmt = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
+
+  const cards = [
+    {cls:'blue', label:'Opening Balance', value: fmt(summary.openingBalance)},
+    {cls:'amber', label:'Total Zones', value: summary.totalZones},
+    {cls:'red', label:'Cash in Hand', value: fmt(summary.cashInHand)},
+    {cls:'green', label:'Cash Deposited', value: fmt(summary.cashDeposited)},
+  ];
+  document.getElementById('metricsRow').innerHTML = cards.map(c => `
+    <div class="glass metric-card ${c.cls}">
+      <p class="metric-label">${c.label}</p>
+      <p class="metric-value">${c.value}</p>
+    </div>
+  `).join('');
+}
+
+/* ---------- CHARTS ---------- */
+function renderCharts(){
+  const colors = chartColors();
+
+  const zoneLabels = zoneBreakdown.map(z => z.zone);
+  const zoneValues = zoneBreakdown.map(z => z.amount);
+
+  const zoneCtx = document.getElementById('zoneChart');
+  if(zoneChartInstance) zoneChartInstance.destroy();
+  zoneChartInstance = new Chart(zoneCtx, {
+    type: 'bar',
+    data: {
+      labels: zoneLabels,
+      datasets: [{ label:'Cash in hand', data: zoneValues, backgroundColor: colors.blue, borderRadius: 6, maxBarThickness: 38 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display:false }, tooltip: { callbacks: { label: (ctx) => '₹' + Math.round(ctx.parsed.y).toLocaleString('en-IN') } } },
+      scales: {
+        x: { grid: { display:false }, ticks: { color: colors.text, font:{size:11}, maxRotation:45, minRotation:0 } },
+        y: { grid: { color: colors.grid }, ticks: { color: colors.text, font:{size:10}, callback:(v)=> '₹'+(v/1000).toFixed(0)+'k' } }
+      }
+    }
+  });
+}
+
+/* ---------- TABLE ---------- */
+const COLUMNS = [
+  {key:'zone', label:'Zone'},
+  {key:'branch', label:'Branch'},
+  {key:'revenueExecutiveName', label:'Revenue executive'},
+  {key:'openingBalance', label:'Opening balance'},
+  {key:'cashInHand', label:'Cash in hand'},
+  {key:'remarks', label:'Remarks'},
+  {key:'status', label:'Status'},
+];
+function renderTableHead(){
+  const row = document.getElementById('tableHeadRow');
+  row.innerHTML = COLUMNS.map(col => {
+    const sorted = sortState.key === col.key;
+    const arrow = sorted ? (sortState.dir === 'asc' ? '▲' : '▼') : '▲';
+    return `<th data-key="${col.key}" class="${sorted ? 'sorted' : ''}">${col.label}<span class="sort-arrow">${arrow}</span></th>`;
+  }).join('');
+  row.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if(key === 'status') return;
+      if(sortState.key === key) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+      else { sortState.key = key; sortState.dir = 'asc'; }
+      sortData(); renderTable(); renderTableHead();
+    });
+  });
+}
+function statusFor(r){
+  if(r.cashInHand > 80000) return {cls:'bad', label:'High'};
+  if(r.cashInHand > 40000) return {cls:'warn', label:'Medium'};
+  return {cls:'ok', label:'Low'};
+}
+function renderTable(){
+  const tbody = document.getElementById('tableBody');
+  const notDeposited = filteredData.filter(r => r.cashInHand > 0);
+  document.getElementById('rowCount').textContent = `${notDeposited.length} record${notDeposited.length===1?'':'s'}`;
+  if(notDeposited.length === 0){
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="${COLUMNS.length}">No branches with outstanding cash</td></tr>`;
+    return;
+  }
+  const rows = notDeposited.slice(0, 300);
+  tbody.innerHTML = rows.map(r => {
+    const st = statusFor(r);
+    return `<tr>
+      <td>${r.zone}</td>
+      <td>${r.branch}</td>
+      <td>${r.revenueExecutiveName}</td>
+      <td class="amt">₹${r.openingBalance.toLocaleString('en-IN')}</td>
+      <td class="amt">₹${r.cashInHand.toLocaleString('en-IN')}</td>
+      <td>${r.remarks || '—'}</td>
+      <td><span class="status-badge ${st.cls}">${st.label}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ---------- RENDER ALL ---------- */
+function renderAll(){
+  renderMetrics();
+  renderCharts();
+  renderTable();
+  renderTableHead();
+}
+
+/* ---------- TOAST ---------- */
+let toastTimer = null;
+function showToast(msg){
+  const toast = document.getElementById('toast');
+  document.getElementById('toastText').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+}
+
+/* ---------- EXCEL UPLOAD ---------- */
+const fileInput = document.getElementById('fileInput');
+const uploadBtn = document.getElementById('uploadBtn');
+const uploadCard = document.getElementById('uploadCard');
+const githubRefreshBtn = document.getElementById('githubRefreshBtn');
+uploadBtn.addEventListener('click', () => fileInput.click());
+githubRefreshBtn.addEventListener('click', () => fetchFromGitHub());
+fileInput.addEventListener('change', (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+['dragover','dragenter'].forEach(evt => uploadCard.addEventListener(evt, (e) => { e.preventDefault(); uploadCard.classList.add('dragover'); }));
+['dragleave','drop'].forEach(evt => uploadCard.addEventListener(evt, (e) => { e.preventDefault(); uploadCard.classList.remove('dragover'); }));
+uploadCard.addEventListener('drop', (e) => { if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+
+function normalizeKey(k){ return String(k).trim().toLowerCase().replace(/[\s_]+/g,''); }
+function parseAmount(val){
+  if(typeof val === 'number') return val;
+  if(val === '' || val === null || val === undefined) return 0;
+  const cleaned = String(val).replace(/[₹$,\s]/g, '');
+  const n = Number(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+
+function findRowIndex(grid, predicate){
+  for(let i=0;i<grid.length;i++){ if(predicate(grid[i])) return i; }
+  return -1;
+}
+function cellText(v){ return String(v ?? '').trim().toLowerCase(); }
+
+function parseWorkbookGrid(grid, sourceLabel){
+  if(!grid.length){ showToast('⚠️ File appears empty'); return false; }
+
+  // --- Section 1: summary totals (header row: Opening Balance / Total Zones / Cash in Hand / Cash Deposited) ---
+  const summaryHeaderIdx = findRowIndex(grid, row =>
+    cellText(row[0]).includes('opening balance') && row.some(c => cellText(c).includes('total zones'))
+  );
+  let newSummary = null;
+  if(summaryHeaderIdx !== -1 && grid[summaryHeaderIdx+1]){
+    const valRow = grid[summaryHeaderIdx+1];
+    newSummary = {
+      openingBalance: parseAmount(valRow[0]),
+      totalZones: parseAmount(valRow[1]),
+      cashInHand: parseAmount(valRow[2]),
+      cashDeposited: parseAmount(valRow[3]),
+    };
+  }
+
+  // --- Section 2: zone breakdown (header row: Cash in hand by zone / Amount) ---
+  const zoneHeaderIdx = findRowIndex(grid, row => cellText(row[0]).includes('cash in hand by zone'));
+  const newZoneBreakdown = [];
+  if(zoneHeaderIdx !== -1){
+    for(let i=zoneHeaderIdx+1; i<grid.length; i++){
+      const row = grid[i];
+      const zoneName = String(row[0] ?? '').trim();
+      if(!zoneName) break;
+      newZoneBreakdown.push({ zone: zoneName, amount: parseAmount(row[1]) });
+    }
+  }
+
+  // --- Section 3: branch detail table (header row: Zone / Branch / Revenue Executive Name / ...) ---
+  const branchHeaderIdx = findRowIndex(grid, row =>
+    cellText(row[0]) === 'zone' && row.some(c => cellText(c).includes('branch'))
+  );
+  const newRawData = [];
+  if(branchHeaderIdx !== -1){
+    const headers = grid[branchHeaderIdx].map(h => normalizeKey(h));
+    const col = (...keys) => { for(const k of keys){ const idx = headers.indexOf(k); if(idx !== -1) return idx; } return -1; };
+    const cZone = col('zone'), cBranch = col('branch'),
+          cExec = col('revenueexecutivename','revenueexecutive','executivename','executive'),
+          cOpening = col('openingbalance','opening'), cCash = col('cashinhand','cash'),
+          cRemarks = col('remarks','remark','note','notes');
+
+    for(let i=branchHeaderIdx+1; i<grid.length; i++){
+      const row = grid[i];
+      const zone = cZone !== -1 ? String(row[cZone] ?? '').trim() : '';
+      const branch = cBranch !== -1 ? String(row[cBranch] ?? '').trim() : '';
+      if(!zone && !branch) break;
+      newRawData.push({
+        id: newRawData.length+1,
+        zone: zone || 'Unknown',
+        branch: branch || 'Unknown',
+        revenueExecutiveName: cExec !== -1 ? String(row[cExec] ?? '').trim() || 'Unknown' : 'Unknown',
+        openingBalance: cOpening !== -1 ? parseAmount(row[cOpening]) : 0,
+        cashInHand: cCash !== -1 ? parseAmount(row[cCash]) : 0,
+        remarks: cRemarks !== -1 ? String(row[cRemarks] ?? '').trim() : '',
+      });
+    }
+  }
+
+  if(!newRawData.length){ showToast('⚠️ Could not find the branch detail table'); return false; }
+
+  rawData = newRawData;
+  summary = newSummary || deriveSummaryAndZones(newRawData).summary;
+  zoneBreakdown = newZoneBreakdown.length ? newZoneBreakdown : deriveSummaryAndZones(newRawData).zoneBreakdown;
+  refreshData();
+  document.getElementById('lastSync').textContent = 'Updated just now';
+  showToast(`✅ Loaded ${newRawData.length} branch records from ${sourceLabel}`);
+  return true;
+}
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, {type:'array', cellDates:false});
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const grid = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+      parseWorkbookGrid(grid, file.name);
+    }catch(err){
+      console.error(err);
+      showToast('⚠️ Could not parse file — check format');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ---------- GITHUB AUTO-FETCH ---------- */
+const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/kalyanchowdary2942/Revenue-cash-dashboard/main/REPORT.xlsx';
+
+async function fetchFromGitHub(){
+  const syncEl = document.getElementById('lastSync');
+  try{
+    syncEl.textContent = 'Loading from GitHub…';
+    const res = await fetch(GITHUB_RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const buf = await res.arrayBuffer();
+    const workbook = XLSX.read(new Uint8Array(buf), {type:'array', cellDates:false});
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const grid = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+    const ok = parseWorkbookGrid(grid, 'GitHub');
+    if(!ok) syncEl.textContent = 'Showing sample data';
+  }catch(err){
+    console.error('GitHub fetch failed:', err);
+    syncEl.textContent = 'Showing sample data (GitHub fetch failed)';
+    showToast('⚠️ Could not load from GitHub — showing sample data');
+  }
+}
+
+/* ---------- INIT ---------- */
+refreshData();
+fetchFromGitHub();
+</script>
+</body>
+</html>
