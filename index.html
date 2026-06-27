@@ -389,7 +389,10 @@ function renderTable(){
   const notDeposited = filteredData.filter(r => r.cashInHand > 0);
   document.getElementById('rowCount').textContent = `${notDeposited.length} record${notDeposited.length===1?'':'s'}`;
   if(notDeposited.length === 0){
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="${COLUMNS.length}">No branches with outstanding cash</td></tr>`;
+    const message = rawData.length === 0
+      ? 'No branch detail data found in the latest file'
+      : 'No branches with outstanding cash';
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="${COLUMNS.length}">${message}</td></tr>`;
     return;
   }
   const rows = notDeposited.slice(0, 300);
@@ -500,7 +503,8 @@ function parseWorkbookGrid(grid, sourceLabel, silent){
     }
   }
 
-  if(!newRawData.length){ if(!silent) showToast('⚠️ Could not find the branch detail table'); return false; }
+  const foundAnything = newSummary !== null || newZoneBreakdown.length > 0 || newRawData.length > 0;
+  if(!foundAnything){ if(!silent) showToast('⚠️ Could not recognize any sections in this file'); return false; }
 
   const newFingerprint = JSON.stringify({newRawData, newSummary, newZoneBreakdown});
   const isFirstLoad = lastDataFingerprint === null;
@@ -513,7 +517,8 @@ function parseWorkbookGrid(grid, sourceLabel, silent){
   refreshData();
   document.getElementById('lastSync').textContent = 'Last checked ' + new Date().toLocaleTimeString();
   if(!silent || dataChanged){
-    showToast(dataChanged ? `✅ Updated — ${newRawData.length} branch records` : `✅ Loaded ${newRawData.length} branch records from ${sourceLabel}`);
+    const branchNote = newRawData.length ? `${newRawData.length} branch records` : 'no branch detail table found';
+    showToast(dataChanged ? `✅ Updated — ${branchNote}` : `✅ Loaded from ${sourceLabel} — ${branchNote}`);
   }
   return true;
 }
